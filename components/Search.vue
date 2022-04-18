@@ -1,8 +1,10 @@
 <template>
   <div class="wrapper">
     <div class="container" @scroll="onScroll">
-      <SearchBar @search="handleInput" :text="text" />
-      <Users :users="filters" :text="text" />
+      <SearchBar @search="handleInput" :text="keyword" />
+      <Users :users="filteredUsers" :text="keyword" />
+      <p v-if="isLoading" class="state">Loading....</p>
+      <p v-if="emptyState" class="state">No Results Found</p>
     </div>
   </div>
 </template>
@@ -12,6 +14,7 @@ html,
 body {
   margin: 0;
   padding: 0;
+  font-family: "Roboto";
 }
 p {
   margin: 0;
@@ -20,7 +23,6 @@ p {
 .wrapper {
   height: 100vh;
   width: 100vw;
-  border: 1px solid red;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -49,59 +51,72 @@ p {
   border: 4px solid rgba(0, 0, 0, 0);
   -webkit-box-shadow: inset 0 0 6px rgba(77, 77, 77, 1);
 }
+
+.state {
+  margin: 25px auto;
+  text-align: center;
+  font-size: 1.2rem;
+  color: rgba(0, 0, 0, 0.543846);
+}
 </style>
 <script lang="ts">
 import Vue from "vue";
 import axios from "axios";
 import { filterArray } from "../helper";
+import { mapMutations, mapGetters } from "vuex";
+import { IUser } from "../interface";
+
+interface IData {
+  keyword: string;
+  filteredUsers: IUser[];
+  worker: any;
+  perPage: number;
+  currentPage: number;
+  totalPages: number;
+  isLoading: boolean;
+}
 
 export default Vue.extend({
   name: "Search",
   props: {
     searchText: String,
   },
-  data() {
+  data(): IData {
     return {
-      text: this.searchText || "",
-      searchedIndex: [],
-      users: [],
+      keyword: this.searchText || "",
+
       filteredUsers: [],
-      //@ts-ignore
       worker: null,
-      perPage: 10,
+      perPage: 20,
       currentPage: 0,
       totalPages: 0,
+      isLoading: true,
     };
   },
   async created() {
-    //   console.log({text })
     //@ts-ignore
-    this.worker = this.$worker.createWorker();
+    if (this.$worker) this.worker = this.$worker.createWorker();
     try {
       const res = await axios.get(
         `https://gist.githubusercontent.com/allaud/093aa499998b7843bb10b44ea6ea02dc/raw/c400744999bf4b308f67807729a6635ced0c8644/users.json`
       );
-      // console.log({ user: res.data });
 
       if (res && res.data) {
-        //take first 10 and save into user and remaining into storage
-        this.users = res.data.slice(0, this.perPage + 1);
+        //take first perPage and save into filterUsers
+        this.filteredUsers = res.data.slice(0, this.perPage);
         this.totalPages = res.data.length / this.perPage;
         this.currentPage = 1;
         if (process.client) {
-          localStorage.setItem(
-            "backlog",
-            JSON.stringify(res.data.slice(this.perPage + 1, res.data.length))
-          );
-          if (this.text) {
-            filterArray(this.users, this.text);
-            const filterUsers = filterArray(this.users, this.text);
+          this.add(res.data);
 
-            this.filteredUsers = [...filterUsers] as any;
+          // This block is for keyword passed via the route
+          if (this.keyword) {
+            const filterUsers = filterArray(this.filteredUsers, this.keyword);
+
+            this.filteredUsers = [...filterUsers];
 
             //Load more data to populate
             if (filterUsers.length < 4) {
-              console.log("lll");
               this.loadData();
             }
           }
@@ -109,112 +124,106 @@ export default Vue.extend({
       }
     } catch (error) {
       console.log(error);
+    } finally {
+      this.isLoading = false;
     }
   },
-  beforeMount() {
-    // this.loadData();
-  },
+
   computed: {
-    filters() {
-      // @ts-ignore
-      return this.filteredUsers.length === 0 ? this.users : this.filteredUsers;
+    // a computed getter
+    emptyState(): boolean {
+      // `this` points to the component instance
+      return this.filteredUsers.length === 0 && !this.isLoading;
     },
   },
-  watch: {
-    // // whenever question changes, this function will run
-    // text(newT, oldQuestion) {
-    //   this.loadData();
-    // },
-  },
+
   methods: {
+    getBacklogUsers(): IUser[] {
+      return this.$store.getters.getUsers || [];
+    },
     postMessageToWorker() {
       if (process.client) {
-        const t =
-          localStorage && localStorage.backlog
-            ? JSON.parse(localStorage.getItem("backlog") as string)
-            : [];
+        // Get new set of users in batch of this.perPage
+        const backlogUsers = this.getBacklogUsers();
 
+        // Update page number
         const newPage = this.currentPage + 1;
 
-        const nextBatch = t.slice(
+        const nextBatch = backlogUsers.slice(
           this.currentPage * this.perPage,
           newPage * this.perPage
         );
 
         this.currentPage = newPage;
-        //@ts-ignore
-        this.worker.postMessage({ text: this.text, data: nextBatch });
+
+        this.worker.postMessage({ text: this.keyword, data: nextBatch });
       }
     },
     loadData() {
-      console.log("worker", this.worker);
-      //@ts-ignore
+      // terminate any previous workers to avoid multiple workers running simultaneously
       this.worker.terminate();
-
-      console.log("worker terminated", this.worker);
 
       //@ts-ignore
       this.worker = this.$worker.createWorker();
 
       if (process.client) {
-        const t =
-          localStorage && localStorage.backlog
-            ? JSON.parse(localStorage.getItem("backlog") as string)
-            : [];
-
-        const newPage = this.currentPage + 1;
-
-        const nextBatch = t.slice(
-          this.currentPage * this.perPage,
-          newPage * this.perPage
-        );
-
-        this.currentPage = newPage;
-        //@ts-ignore
-        this.worker.postMessage({ text: this.text, data: nextBatch });
+        //Post message to worker
+        this.postMessageToWorker();
       }
 
-      //@ts-ignore
       this.worker.addEventListener("message", (event: any) => {
-        console.log(event.data, "filtered");
         const { filterUsers } = event.data;
-        //if filterUsers length === 0 // send another message until the last page
+        //if filterUsers length <= 4
+        // Keep posting to worker until greater than 4. This is to populate as much data on the page to enable scrolling
         // Fetch more from localstorage if the data is not a lot
-        console.log({ total: this.totalPages });
-        if (filterUsers.length < 4 && this.currentPage !== this.totalPages) {
+
+        if (filterUsers.length < 4 && this.currentPage <= this.totalPages) {
           this.postMessageToWorker();
         }
-        this.filteredUsers = [...this.filteredUsers, ...filterUsers] as any;
+        //Update filteredUsers
+        this.filteredUsers = [...this.filteredUsers, ...filterUsers];
       });
     },
     onScroll(event: any) {
-      console.log("jiiii");
       const { scrollTop, clientHeight, scrollHeight } = event.target;
       if (scrollTop + clientHeight >= scrollHeight) {
         // load more data
+
         this.loadData();
       }
     },
     async handleInput(value: string) {
-      console.log("======== STARTING ==========");
+      this.currentPage = 1;
       // // `this` inside methods points to the current active instance
 
-      this.text = value;
+      this.keyword = value;
 
       if (value) {
         value = value.toLowerCase();
 
-        const filterUsers = filterArray(this.users, value);
+        const backlogUsers = this.getBacklogUsers();
 
-        this.filteredUsers = [...filterUsers] as any;
+        const initialUsers = backlogUsers.slice(0, this.perPage);
 
-        //Load more data to populate
+        const filterUsers = filterArray(initialUsers, value);
+
+        this.filteredUsers = [...filterUsers];
+
+        //Load more data to populate page
         if (filterUsers.length < 4) {
-          console.log("lll");
           this.loadData();
+        }
+      } else {
+        const backlogUsers = this.getBacklogUsers();
+
+        if (backlogUsers.length > 0) {
+          this.filteredUsers = backlogUsers.slice(0, this.perPage);
         }
       }
     },
+    ...mapMutations({
+      add: "add",
+    }),
   },
 });
 </script>

@@ -3,21 +3,16 @@ export function filterArray(array, text) {
     let isFound = false;
     Object.keys(user).forEach((field) => {
       let index = -1;
-      if (typeof user[field] == "string") {
+      // todo: pass field to exempt as an array
+      if (typeof user[field] == "string" && field !== "avatar") {
         index = user[field].toLowerCase().indexOf(text);
       }
-      console.log({
-        field:
-          typeof user[field] == "string" ? user[field].toLowerCase() : null,
-        index,
-        text,
-      });
+
       if (index !== -1) {
         isFound = true;
       }
     });
-    console.log({ isFound });
-    return isFound && user;
+    return isFound && { ...user, index: i };
   });
 
   return filterUsers;

@@ -11,6 +11,10 @@
 .search_container {
   position: relative;
 }
+
+.search_container img {
+  cursor: pointer;
+}
 .search_container input {
   width: 100%;
   background: #fafafa;
@@ -21,6 +25,10 @@
   font-size: 1.8rem;
   box-sizing: border-box;
   padding-left: 45px;
+  outline: none;
+}
+.search_container input:focus {
+  border: 1px solid #eee;
 }
 .search_container img {
   position: absolute;

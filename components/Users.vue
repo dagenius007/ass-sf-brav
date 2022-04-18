@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="target" v-for="user in users">
+    <div class="target" v-for="user in users" :key="user.index">
       <div class="user-container">
         <img :src="user.avatar" />
         <div class="user_info">
@@ -8,7 +8,10 @@
             <div>
               <h4 v-html="updateHtml(user.name)" />
               <p v-html="updateHtml(user.title)" class="grey-dark" />
-              <p v-html="updateHtml(user.address)" class="grey" />
+              <p
+                v-html="updateHtml(`${user.address}, ${user.city}`)"
+                class="grey"
+              />
             </div>
             <p v-html="updateHtml(user.email)" class="grey email" />
           </div>
@@ -69,7 +72,7 @@
 }
 
 .select {
-  color: red;
+  background-color: #fff73b;
 }
 .flex-jc-sb {
   display: flex;
@@ -100,9 +103,7 @@ export default {
     },
 
     updateHtml(text) {
-      // console.log({ text, users: this.users });
       if (this.text && text) {
-        //use regex instead
         const index = text.toLowerCase().indexOf(this.text.toLowerCase());
         let newString = "";
         if (index !== -1) {
@@ -113,8 +114,6 @@ export default {
             "</span>" +
             text.substring(index + this.text.length, text.length);
         }
-
-        // console.log({ newString, text, index });
         return newString || text;
       }
       return text;

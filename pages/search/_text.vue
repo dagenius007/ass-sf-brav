@@ -1,5 +1,5 @@
 <template>
-  <Search :searchText="text" />
+  <Search :searchText="keyword" />
 </template>
 
 <style>
@@ -52,11 +52,8 @@ export default Vue.extend({
   name: "SearchUrl",
   data() {
     return {
-      text: this.$route.params.text || "",
+      keyword: this.$route.params.text || "",
     };
-  },
-  created() {
-    // console.log({ route: this.$route });
   },
 });
 </script>
